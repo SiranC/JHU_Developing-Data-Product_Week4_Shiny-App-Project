@@ -1,0 +1,128 @@
+---
+title: "Developing Data Products Week4 Project"
+author: "SiranC"
+output: 
+  slidy_presentation: default
+  ioslides_presentation: default
+  beamer_presentation: default
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Project Instructions
+
+This peer assessed assignment has two parts. First, you will create a Shiny application and deploy it on Rstudio's servers. Second, you will use Slidify or Rstudio Presenter to prepare a reproducible pitch presentation about your application.
+
+Your Shiny Application
+
+1. Write a shiny application with associated supporting documentation. The documentation should be thought of as whatever a user will need to get started using your application.
+2. Deploy the application on Rstudio's shiny server
+3. Share the application link by pasting it into the provided text box
+4. Share your server.R and ui.R code on github
+
+The application must include the following:
+
+1. Some form of input (widget: textbox, radio button, checkbox, ...)
+2. Some operation on the ui input in sever.R
+3. Some reactive output displayed as a result of server calculations
+4. You must also include enough documentation so that a novice user could use your application.
+5. The documentation should be at the Shiny website itself. Do not post to an external link.
+
+## Project Review
+
+In this project, the Canada COVID-19 cases data from [Government of Canada]( https://health-infobase.canada.ca/covid-19/) was used to create a Shiny application showing the case number of COVID-19 cross the country by 09/20/2020.
+
+## Data Process
+
+```{r, echo=TRUE, message=FALSE}
+library(dplyr)
+library(lubridate)
+
+covid <- read.csv('covid19.csv', stringsAsFactors= FALSE, header = TRUE)
+covid <- covid %>%
+    select(pruid, prname,date,numconf,numdeaths,numtotal,numtested,numrecover)
+covid$date <- parse_date_time(covid$date, orders = c("ymd", "dmy", "mdy"))
+
+head(covid)
+```
+
+## Shiny Application
+
+```{r, echo = FALSE, fig.fullwidth=TRUE}
+library(shiny)
+library(dplyr)
+library(lubridate)
+
+#Data loading
+covid <- read.csv('covid19.csv', stringsAsFactors= FALSE, header = TRUE)
+covid <- covid %>%
+    select(pruid, prname,date,numconf,numdeaths,numtotal,numtested,numrecover)
+covid$date <- parse_date_time(covid$date, orders = c("ymd", "dmy", "mdy"))
+
+# Define UI for application
+ui <- fluidPage(
+        #Application Title
+        titlePanel("COVID-19 Cases in Canada"),
+        
+        #Sidebar with multiple slider input
+        sidebarLayout(
+            sidebarPanel(
+                dateRangeInput('date',strong('Select a Period:'),
+                               start = '2020-01-31', end = '2020-09-20',
+                               min = '2020-01-31', max = '2020-09-20'
+                ),
+                
+                selectInput('region',strong('Select a Region'),
+                            c('Canada','British Columbia','Manitoba','New Brunswick',
+                              'Newfoundland and Labrador','Northwest Territories',
+                              'Nova Scotia', 'Nunavut','Ontario','Prince Edward Island',
+                              'Quebec','Repatriated travellers','Saskatchewan','Yukon')
+                ),
+                
+                radioButtons('data_type','Select a data type',
+                             c('numconf','numdeaths','numtotal','numtested',
+                               'numrecover')
+                )
+            ),
+            
+            mainPanel(
+                h3("The Progression of COVID-19 Cases in Canda"),
+                plotOutput("distPlot"),
+                h3('Data Summary'),
+                verbatimTextOutput('view'),
+                tags$a(href = "https://health-infobase.canada.ca/covid-19/", 
+                       "Source: Government of Canada", target = "_blank")
+            )
+        )
+    )
+
+# Define server logic required to plot the data
+server <- function(input, output) {
+
+    # subset data
+    selected_data <- reactive({
+        covid %>%
+            select(prname,date,input$data_type)%>%
+            filter(prname == input$region,
+                   date >= as.POSIXct(input$date[1]) & date <= as.POSIXct(input$date[2]))
+    })
+    
+    output$distPlot <- renderPlot({
+        plot(x =  selected_data()$date, y = selected_data()[,3],
+             type = 'l', lwd = 2, xlab = 'Date', 
+             ylab = paste('Number of Cases in',input$region),
+             col = 'purple')
+    })
+    
+    output$view <- renderPrint({
+        summary(selected_data())
+    })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+```
+
